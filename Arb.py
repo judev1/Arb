@@ -7,32 +7,63 @@ class Arb:
         self.digits = list()
 
         num = str(num)
-        temp = num
-        if "." in temp:
-            temp = temp.replace(".", "", 1)
-        if temp[0] == "-":
-            temp = temp[1:]
 
-        if not temp.isnumeric():
-            raise Exception(f"'{num}' cannot be interpreted as a number")
+        if "e" in num:
 
-        if num[0] == "-":
-            num = num[1:]
-            self.sign = -1
+            # In the case that the number provided contains a whole integer
+            # exponent, we calculate its true value
+            man, e = map(Arb, num.split("e"))
+            for i in range(int(e)):
+                if e.sign == 1:
+                    man *= Arb(10)
+
+            self.digits = man.digits
+            self.dp = man.dp
+            self.sign = man.sign
+
         else:
-            self.sign = 1
 
-        self.dp = len(num.replace(".", ""))
+            # Creates a temporary value
+            temp = num
 
-        for i, digit in enumerate(num):
-            if digit == ".":
-                self.dp = i
+            if "." in temp:
+                temp = temp.replace(".", "", 1)
+            if temp[0] == "-":
+                temp = temp[1:]
+            elif temp[0] == "+":
+                temp = temp[1:]
+
+            # Raises an exception if the number contains non numeric characters
+            if not temp.isnumeric():
+                raise Exception(f"'{num}' cannot be interpreted as a number")
+
+            # Checks if the number string starts with +/- and determines the
+            # sign
+            if num[0] == "-":
+                num = num[1:]
+                self.sign = -1
+            elif num[0] == "+":
+                num = num[1:]
+                self.sign = 1
             else:
-                self.digits.append(int(digit))
+                self.sign = 1
 
-        if self.dp == 0:
-            self.dp = 1
-            self.digits.insert(0, 0)
+            # As a default the decimal point is set to the number of digits,
+            # where the first decimal point would be in the case the number is
+            # an integer
+            self.dp = len(num.replace(".", ""))
+
+            # Locate the decimal point
+            for i, digit in enumerate(num):
+                if digit == ".":
+                    self.dp = i
+                else:
+                    self.digits.append(int(digit))
+
+            # For numbers provided that start with a decimal point
+            if self.dp == 0:
+                self.dp = 1
+                self.digits.insert(0, 0)
 
     @staticmethod
     def new(digits, dp, sign=1):
@@ -359,6 +390,83 @@ class Arb:
 
         return digits, dp
 
+    @staticmethod
+    def __truemul__(digits1, dp1, digits2, dp2):
+
+        dp = 0
+        digits = [0]
+
+        # print(digits1, dp1, digits2, dp2)
+
+
+        # Iterates through every digit in arb1 to be multiplied by each digit
+        # in arb2
+        for i, value1 in enumerate(digits1):
+            for j, value2 in enumerate(digits2):
+                # print(i, j, digits)
+
+                # Calculates the displacement of the digit from the ones column
+                displacement1 = (i - dp1 if i - 1 < dp1 else i - dp1) + 1
+                displacement2 = (j - dp2 if j - 1 < dp2 else j - dp2) + 1
+
+                # Uses the displacements to work out the new value's
+                # displacement and then its index
+                displacement = displacement1 + displacement2
+                index = dp + displacement
+
+                # Checks if the index exists in the digits list and extends the
+                # list if it doesn't
+                while index < 0:
+                    digits.insert(0, 0)
+                    index += 1
+                    dp += 1
+                while index >= len(digits):
+                    digits.append(0)
+
+                # print(index, dp, displacement1, displacement2)
+
+                value = (value1 * value2 + digits[index]) % 10
+                carry = (value1 * value2 + digits[index]) // 10
+
+                # print("In", index - dp, f"column ({index})")
+                # print(f" :: {value1}*{value2} + {digits[index]} -> {carry}, {value}")
+
+                digits[index] = value
+                # print(" ::", digits, index, displacement, dp)
+
+                while carry:
+
+                    displacement -= 1
+                    index -= 1
+
+                    # Checks if the index exists in the digits list and extends the
+                    # list if it doesn't
+                    while index < 0:
+                        index += 1
+                        dp += 1
+                        digits.insert(0, 0)
+
+                    oldcarry = carry
+
+                    value = (carry + digits[index]) % 10
+                    carry = (carry + digits[index]) // 10
+
+                    # print(" :: In", index - dp, f"column ({index})")
+                    # print(f" :: :: {oldcarry} + {digits[index]} -> {carry}, {value}")
+
+                    digits[index] = value
+                    # print(" :: ::", digits, dp)
+
+        #         input()
+        # print(digits, dp)
+
+        # Remove leading zeros
+        while digits[0] == 0 and dp > 0:
+            digits.pop(0)
+            dp -= 1
+
+        return digits, dp + 1
+
     def __add__(arb1, arb2):
 
         if not isinstance(arb2, Arb):
@@ -433,3 +541,46 @@ class Arb:
             digits, dp = Arb.__trueadd__(digits1, dp1, digits2, dp2)
 
         return Arb.new(digits, dp, sign)
+
+    def __mul__(arb1, arb2):
+
+        if not isinstance(arb2, Arb):
+            raise Exception("Cannot perform subtraction on non Arb type")
+
+        # Gets the arbitrary precision for the Arb objects
+        digits1, dp1 = arb1.__round__(Arb.PRECISION)
+        digits2, dp2 = arb2.__round__(Arb.PRECISION)
+
+        return Arb.new(*Arb.__truemul__(digits1, dp1, digits2, dp2))
+
+
+if __name__ == "__main__":
+
+    Arb.PRECISION = 20
+
+    def gen_num():
+        num = ""
+        length = random.randint(1, 40)
+        dp = random.randint(0, length)
+        for i in range(length):
+            num += str(random.randint(0, 9))
+        num = num[:dp] + "." + num[dp:]
+        return num
+
+    import random
+    while True:
+
+        arb1 = Arb(gen_num())
+        arb2 = Arb(gen_num())
+        if random.randint(0, 1):
+            ans = arb1 * arb2
+            actualans = Arb(float(arb1) * float(arb2))
+            print(f"{arb1} * {arb2} = {ans}")
+        else:
+            ans = arb1 * arb2
+            actualans = Arb(float(arb1) * float(arb2))
+            print(f"{arb1} * {arb2} = {ans}")
+        print("Actual answer is", actualans)
+        if ans != actualans:
+            print("  !! NOT EQUAL ------------------------")
+        input()

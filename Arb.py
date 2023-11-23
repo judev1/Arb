@@ -396,14 +396,10 @@ class Arb:
         dp = 0
         digits = [0]
 
-        # print(digits1, dp1, digits2, dp2)
-
-
         # Iterates through every digit in arb1 to be multiplied by each digit
         # in arb2
         for i, value1 in enumerate(digits1):
             for j, value2 in enumerate(digits2):
-                # print(i, j, digits)
 
                 # Calculates the displacement of the digit from the ones column
                 displacement1 = (i - dp1 if i - 1 < dp1 else i - dp1) + 1
@@ -423,42 +419,25 @@ class Arb:
                 while index >= len(digits):
                     digits.append(0)
 
-                # print(index, dp, displacement1, displacement2)
-
                 value = (value1 * value2 + digits[index]) % 10
                 carry = (value1 * value2 + digits[index]) // 10
-
-                # print("In", index - dp, f"column ({index})")
-                # print(f" :: {value1}*{value2} + {digits[index]} -> {carry}, {value}")
-
                 digits[index] = value
-                # print(" ::", digits, index, displacement, dp)
 
                 while carry:
 
                     displacement -= 1
                     index -= 1
 
-                    # Checks if the index exists in the digits list and extends the
-                    # list if it doesn't
+                    # Checks if the index exists in the digits list and extends
+                    # the list if it doesn't
                     while index < 0:
                         index += 1
                         dp += 1
                         digits.insert(0, 0)
 
-                    oldcarry = carry
-
                     value = (carry + digits[index]) % 10
                     carry = (carry + digits[index]) // 10
-
-                    # print(" :: In", index - dp, f"column ({index})")
-                    # print(f" :: :: {oldcarry} + {digits[index]} -> {carry}, {value}")
-
                     digits[index] = value
-                    # print(" :: ::", digits, dp)
-
-        #         input()
-        # print(digits, dp)
 
         # Remove leading zeros
         while digits[0] == 0 and dp > 0:
@@ -545,13 +524,22 @@ class Arb:
     def __mul__(arb1, arb2):
 
         if not isinstance(arb2, Arb):
-            raise Exception("Cannot perform subtraction on non Arb type")
+            raise Exception("Cannot perform multiplication on non Arb type")
 
         # Gets the arbitrary precision for the Arb objects
         digits1, dp1 = arb1.__round__(Arb.PRECISION)
         digits2, dp2 = arb2.__round__(Arb.PRECISION)
 
-        return Arb.new(*Arb.__truemul__(digits1, dp1, digits2, dp2))
+        # Numbers multiplied together with the same sign will always be
+        # positive, and will always be negative if they have opposite signs
+        if arb1.sign == arb2.sign:
+            sign = 1
+        else:
+            sign = -1
+
+        digits, dp = Arb.__truemul__(digits1, dp1, digits2, dp2)
+
+        return Arb.new(digits, dp, sign)
 
 
 if __name__ == "__main__":
